@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 04-Oct-2023 at 09:45:02 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Module Name</td>
+        <td>Login</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.0"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.22621-SP0</td></tr>
+      <tr>
+        <td>Project Name</td>
+        <td>BConView</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.5</td></tr>
+      <tr>
+        <td>Tester</td>
+        <td>H Oliva</td></tr></table>
+    <h2>Summary</h2>
+    <p>28 tests ran in 406.11 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">28 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_login.py::Test_001_Login::test_homePageTitle</td>
+          <td class="col-duration">6.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_login.py:21 ****************** Test_001_Login **********************
+INFO     root:test_login.py:22 ************* Verifying Home Page Title ******************
+INFO     root:test_login.py:29 ************* Home Page Title test passed *********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_login_ddt.py::Test_002_DDT_Login::test_login_ddt</td>
+          <td class="col-duration">4.71</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Number of Rows in a Excel: 4
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_login_ddt.py:21 ************* Test_002_DDT_Login  *********************
+INFO     root:test_login_ddt.py:22 ************* Verifying Login DDT test  *********************
+INFO     root:test_login_ddt.py:49 *** Passed ***
+INFO     root:test_login_ddt.py:53 *** Failed ***
+INFO     root:test_login_ddt.py:53 *** Failed ***
+INFO     root:test_login_ddt.py:67 ****** Login DDT test passed ******
+INFO     root:test_login_ddt.py:75 ************* End of DDT Login Test *********************
+INFO     root:test_login_ddt.py:76 ************* Completed Test_002_DDT_Login  *********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addUser.py::Test_003_AddUser::test_addUser</td>
+          <td class="col-duration">6.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addUser.py:21 ****************** Test_003_AddUser **********************
+INFO     root:test_addUser.py:32 ****************** Login successful **********************
+INFO     root:test_addUser.py:34 ****************** Starting Add User Test **********************
+INFO     root:test_addUser.py:43 ****************** Providing user information **********************
+INFO     root:test_addUser.py:57 ****************** Saving user information **********************
+INFO     root:test_addUser.py:59 ****************** Add User validation started **********************
+INFO     root:test_addUser.py:67 ****************** End Test_003_AddUser **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_searchUserByEmail.py::Test_004_SearchUserByEmail::test_searchUserByEmail</td>
+          <td class="col-duration">9.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> ------------------------------Captured stdout call------------------------------ <br/>status:True
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_searchUserByEmail.py:20 ****************** Test_004_SearchUserByEmail **********************
+INFO     root:test_searchUserByEmail.py:31 ****************** Login successful **********************
+INFO     root:test_searchUserByEmail.py:33 ****************** Starting Search User By Email **********************
+INFO     root:test_searchUserByEmail.py:40 ****************** Searching User By Email **********************
+INFO     root:test_searchUserByEmail.py:51 ************* Searching User By Email is passed *********************
+INFO     root:test_searchUserByEmail.py:58 ****************** Test_004_SearchUserByEmail Finished **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_searchUserByUsername.py::Test_005_SearchUserByUsername::test_searchUserByUsername</td>
+          <td class="col-duration">9.30</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_searchUserByUsername.py:20 ****************** Test_005_SearchUserByUsername **********************
+INFO     root:test_searchUserByUsername.py:31 ****************** Login successful **********************
+INFO     root:test_searchUserByUsername.py:33 ****************** Starting Search User By Username **********************
+INFO     root:test_searchUserByUsername.py:41 ****************** Searching User By Username **********************
+INFO     root:test_searchUserByUsername.py:52 ************* Searching User By Username is passed *********************
+INFO     root:test_searchUserByUsername.py:59 ****************** Test_005_SearchUserByUsername Finished **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addGroup.py::Test_006_AddGroup::test_addGroup</td>
+          <td class="col-duration">4.73</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addGroup.py:23 ****************** Test_006_AddGroup **********************
+INFO     root:test_addGroup.py:33 ****************** Login successful **********************
+INFO     root:test_addGroup.py:35 ****************** Starting Add Group Test **********************
+INFO     root:test_addGroup.py:44 ****************** Providing group information **********************
+INFO     root:test_addGroup.py:52 ****************** Saving group information **********************
+INFO     root:test_addGroup.py:54 ****************** Add Group validation started **********************
+INFO     root:test_addGroup.py:63 ********* Add group Test Passed ***************
+INFO     root:test_addGroup.py:72 ****************** End Test_006_AddGroup **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_searchGroupByGroupName.py::Test_007_SearchGroupByGroupName::test_searchGroupByGroupName</td>
+          <td class="col-duration">14.78</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_searchGroupByGroupName.py:20 ****************** Test_007_SearchGroupByGroupName **********************
+INFO     root:test_searchGroupByGroupName.py:31 ****************** Login successful **********************
+INFO     root:test_searchGroupByGroupName.py:33 ****************** Starting Search Group By GroupName **********************
+INFO     root:test_searchGroupByGroupName.py:42 ****************** Searching Group By GroupName **********************
+INFO     root:test_searchGroupByGroupName.py:53 ************* Searching Group By GroupName is passed *********************
+INFO     root:test_searchGroupByGroupName.py:60 ****************** Test_007_SearchGroupByGroupName Finished **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addRoleToGroup.py::Test_008_AddRoleToGroup::test_addRoleToGroup</td>
+          <td class="col-duration">17.45</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addRoleToGroup.py:24 ****************** Test_008_AddRoleToGroup **********************
+INFO     root:test_addRoleToGroup.py:35 ****************** Login successful **********************
+INFO     root:test_addRoleToGroup.py:37 ****************** Starting Adding Role to a Group **********************
+INFO     root:test_addRoleToGroup.py:44 ****************** Adding Role to a Group **********************
+INFO     root:test_addRoleToGroup.py:60 ****************** Saving group information **********************
+INFO     root:test_addRoleToGroup.py:62 ****************** Edit Group validation started **********************
+INFO     root:test_addRoleToGroup.py:71 ********* Edit group Test Passed ***************
+INFO     root:test_addRoleToGroup.py:80 ****************** End Test_008_AddRoleToGroup **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addUserToGroup.py::Test_009_AddUserToGroup::test_addUserToGroup</td>
+          <td class="col-duration">24.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addUserToGroup.py:24 ****************** Test_009_AddUserToGroup **********************
+INFO     root:test_addUserToGroup.py:34 ****************** Login successful **********************
+INFO     root:test_addUserToGroup.py:36 ****************** Starting Adding User to a Group **********************
+INFO     root:test_addUserToGroup.py:43 ****************** Adding User to a Group **********************
+INFO     root:test_addUserToGroup.py:60 ****************** Saving group information **********************
+INFO     root:test_addUserToGroup.py:62 ****************** Edit Group validation started **********************
+INFO     root:test_addUserToGroup.py:71 ********* Add user to G group Test Passed ***************
+INFO     root:test_addUserToGroup.py:78 ****************** End Test_009_AddUserToGroup **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addRole.py::Test_010_AddRole::test_addRole</td>
+          <td class="col-duration">8.44</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addRole.py:24 ****************** Test_010_AddRole **********************
+INFO     root:test_addRole.py:35 ****************** Login successful **********************
+INFO     root:test_addRole.py:37 ****************** Starting Add Role Test **********************
+INFO     root:test_addRole.py:47 ****************** Providing role information **********************
+INFO     root:test_addRole.py:60 ****************** Saving role information **********************
+INFO     root:test_addRole.py:63 ********* Add role Test Passed ***************
+INFO     root:test_addRole.py:77 ****************** End Test_010_AddRole **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_searchRoleByRoleDesc.py::Test_011_SearchRoleByRoleDesc::test_searchRoleByRoleDesc</td>
+          <td class="col-duration">19.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_searchRoleByRoleDesc.py:21 ****************** Test_011_SearchRoleByRoleDesc **********************
+INFO     root:test_searchRoleByRoleDesc.py:31 ****************** Login successful **********************
+INFO     root:test_searchRoleByRoleDesc.py:33 ****************** Starting Search Role By Role Description **********************
+INFO     root:test_searchRoleByRoleDesc.py:40 ****************** Searching Group By Role Desc **********************
+INFO     root:test_searchRoleByRoleDesc.py:51 ************* Searching Role By Role Desc is passed *********************
+INFO     root:test_searchRoleByRoleDesc.py:58 ****************** Test_011_SearchRoleByRoleDesc Finished **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_searchRoleByRoleDescAndEdit.py::Test_012_SearchRoleByRoleDescAndEdit::test_searchRoleByRoleDesc</td>
+          <td class="col-duration">19.78</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_searchRoleByRoleDescAndEdit.py:21 ****************** Test_012_SearchRoleByRoleDescAndEdit **********************
+INFO     root:test_searchRoleByRoleDescAndEdit.py:31 ****************** Login successful **********************
+INFO     root:test_searchRoleByRoleDescAndEdit.py:33 *************** Starting Search Role By Role Description and Edit it ******************
+INFO     root:test_searchRoleByRoleDescAndEdit.py:40 ****************** Searching Group By Role Desc **********************
+INFO     root:test_searchRoleByRoleDescAndEdit.py:54 ************* Searching Role By Role Desc and Edit is passed *********************
+INFO     root:test_searchRoleByRoleDescAndEdit.py:61 ****************** Test_012_SearchRoleByRoleDescAndEdit Finished **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addWorkspace.py::Test_013_AddWorkspace::test_addWorkspace</td>
+          <td class="col-duration">7.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addWorkspace.py:24 ****************** Test_0013_AddWorkspace **********************
+INFO     root:test_addWorkspace.py:35 ****************** Login successful **********************
+INFO     root:test_addWorkspace.py:37 ****************** Starting Add Workspace Test **********************
+INFO     root:test_addWorkspace.py:46 ****************** Providing workspace information **********************
+INFO     root:test_addWorkspace.py:57 ****************** Saving workspace information **********************
+INFO     root:test_addWorkspace.py:59 ****************** Add Workspace validation started **********************
+INFO     root:test_addWorkspace.py:68 ********* Add workspace Test Passed ***************
+INFO     root:test_addWorkspace.py:75 ****************** End Test_013_AddWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_assignCompToWorkspace.py::Test_014_AssignCompToWorkspace::test_assignCompToWorkspace</td>
+          <td class="col-duration">16.73</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_assignCompToWorkspace.py:21 ****************** Test_014_AssignCompToWorkspace **********************
+INFO     root:test_assignCompToWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_assignCompToWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_assignCompToWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_assignCompToWorkspace.py:51 *************** Assign Components to a Workspace validation started *******************
+INFO     root:test_assignCompToWorkspace.py:71 ********* Assign Components to a Workspace Test Passed ***************
+INFO     root:test_assignCompToWorkspace.py:79 ****************** End Test_014_AssignCompToWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_assignUserToWorkspace.py::Test_016_AssignUserToWorkspace::test_assignUserToWorkspace</td>
+          <td class="col-duration">20.56</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_assignUserToWorkspace.py:21 ****************** Test_016_AssignUserToWorkspace **********************
+INFO     root:test_assignUserToWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_assignUserToWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_assignUserToWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_assignUserToWorkspace.py:56 *************** Assign User to a Workspace validation started *******************
+INFO     root:test_assignUserToWorkspace.py:62 ********* Assign User to Workspace Test Passed ***************
+INFO     root:test_assignUserToWorkspace.py:69 ****************** End Test_016_AssignUserToWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_assignGGroupToWorkspace.py::Test_017_AssignGGroupToWorkspace::test_assignGGroupToWorkspace</td>
+          <td class="col-duration">19.90</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_assignGGroupToWorkspace.py:21 ****************** Test_017_AssignGGroupToWorkspace **********************
+INFO     root:test_assignGGroupToWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_assignGGroupToWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_assignGGroupToWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_assignGGroupToWorkspace.py:57 *************** Assign Global Group to a Workspace validation started *******************
+INFO     root:test_assignGGroupToWorkspace.py:63 ********* Assign Global Group to Workspace Test Passed ***************
+INFO     root:test_assignGGroupToWorkspace.py:70 ****************** End Test_017_AssignGGroupToWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_createLGroupAtWorkspace.py::Test_018_CreateLGroupAtWorkspace::test_createLGroupAtWorkspace</td>
+          <td class="col-duration">25.50</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_createLGroupAtWorkspace.py:21 ****************** Test_018_CreateLGroupAtWorkspace **********************
+INFO     root:test_createLGroupAtWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_createLGroupAtWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_createLGroupAtWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_createLGroupAtWorkspace.py:67 *************** Create Local Group at Workspace validation started *******************
+INFO     root:test_createLGroupAtWorkspace.py:73 ********* Create Local Group at Workspace Test Passed ***************
+INFO     root:test_createLGroupAtWorkspace.py:80 ****************** End Test_018_CreateLGroupAtWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_removeGGroupFromWorkspace.py::Test_019_RemoveGGroupFromWorkspace::test_removeGGroupFromWorkspace</td>
+          <td class="col-duration">17.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_removeGGroupFromWorkspace.py:21 ****************** Test_019_RemoveGGroupFromWorkspace **********************
+INFO     root:test_removeGGroupFromWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_removeGGroupFromWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_removeGGroupFromWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_removeGGroupFromWorkspace.py:53 *************** Remove Global Group from a Workspace validation started *******************
+INFO     root:test_removeGGroupFromWorkspace.py:59 ********* Remove Global Group from a Workspace Test Passed ***************
+INFO     root:test_removeGGroupFromWorkspace.py:66 ****************** End Test_019_RemoveGGroupFromWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_removeLGroupFromWorkspace.py::Test_020_RemoveLGroupFromWorkspace::test_removeLGroupFromWorkspace</td>
+          <td class="col-duration">16.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_removeLGroupFromWorkspace.py:21 ****************** Test_020_RemoveLGroupFromWorkspace **********************
+INFO     root:test_removeLGroupFromWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_removeLGroupFromWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_removeLGroupFromWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_removeLGroupFromWorkspace.py:55 *************** Remove Local Group from a Workspace validation started *******************
+INFO     root:test_removeLGroupFromWorkspace.py:61 ********* Remove Local Group from a Workspace Test Passed ***************
+INFO     root:test_removeLGroupFromWorkspace.py:68 ****************** End Test_020_RemoveLGroupFromWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_orgSetupForm.py::Test_021_OrgSetupForm::test_orgSetupForm</td>
+          <td class="col-duration">7.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_orgSetupForm.py:25 ****************** Test_021_OrgSetupPage **********************
+INFO     root:test_orgSetupForm.py:43 ****************** Login successful **********************
+INFO     root:test_orgSetupForm.py:45 ****************** Starting Org Setup Form Test **********************
+INFO     root:test_orgSetupForm.py:53 ****************** Providing pagination information **********************
+INFO     root:test_orgSetupForm.py:59 ****************** Saving Organization information **********************
+INFO     root:test_orgSetupForm.py:61 ****************** Org Setup validation started **********************
+INFO     root:test_orgSetupForm.py:69 ********* Org Setup Form Test Passed ***************
+INFO     root:test_orgSetupForm.py:76 ****************** End Test_021_OrgSetupForm **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addDataToBIA.py::Test_022_AddDataToBIA::test_addDataToBIA</td>
+          <td class="col-duration">28.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addDataToBIA.py:22 ****************** Test_022_AddDataToBIA **********************
+INFO     root:test_addDataToBIA.py:33 ****************** Login successful **********************
+INFO     root:test_addDataToBIA.py:35 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_addDataToBIA.py:42 ****************** Searching Workspace By WSName **********************
+INFO     root:test_addDataToBIA.py:74 ****************** End Test_022_AddDataToBIA **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_removeGGroup.py::Test_023_RemoveGGroup::test_removeGGroup</td>
+          <td class="col-duration">16.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_removeGGroup.py:24 ****************** Test_023_RemoveGGroup **********************
+INFO     root:test_removeGGroup.py:35 ****************** Login successful **********************
+INFO     root:test_removeGGroup.py:37 ****************** Starting Removing a Global Group **********************
+INFO     root:test_removeGGroup.py:44 ****************** Removing a Global Group **********************
+INFO     root:test_removeGGroup.py:57 ****************** Deleting group information **********************
+INFO     root:test_removeGGroup.py:59 ****************** Delete Group validation started **********************
+INFO     root:test_removeGGroup.py:66 ********* Delete group Test Passed ***************
+INFO     root:test_removeGGroup.py:75 ****************** End Test_023_RemoveGGroup **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_createInputSectionInAComponent.py::Test_024_CreateInputSectionInAComponent::test_createInputSectionInAComponent</td>
+          <td class="col-duration">20.29</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_createInputSectionInAComponent.py:21 ****************** Test_024_CreateInputSectionInAComponent **********************
+INFO     root:test_createInputSectionInAComponent.py:31 ****************** Login successful **********************
+INFO     root:test_createInputSectionInAComponent.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_createInputSectionInAComponent.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_createInputSectionInAComponent.py:51 *************** Create an Input Section in BIA Component started *******************
+INFO     root:test_createInputSectionInAComponent.py:65 ********* Create an Input Section Test Passed ***************
+INFO     root:test_createInputSectionInAComponent.py:73 ****************** End Test_024_CreateInputSectionInAComponent *******************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_createOutputSectionInAComponent.py::Test_025_CreateOutputSectionInAComponent::test_createOutputSectionInAComponent</td>
+          <td class="col-duration">23.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_createOutputSectionInAComponent.py:21 ****************** Test_025_CreateOutputSectionInAComponent **********************
+INFO     root:test_createOutputSectionInAComponent.py:31 ****************** Login successful **********************
+INFO     root:test_createOutputSectionInAComponent.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_createOutputSectionInAComponent.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_createOutputSectionInAComponent.py:51 *************** Create an Output Section in BIA Component started *******************
+INFO     root:test_createOutputSectionInAComponent.py:69 ********* Create an Output Section Test Passed ***************
+INFO     root:test_createOutputSectionInAComponent.py:77 ****************** End Test_025_CreateOutputSectionInAComponent *******************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_addTask.py::Test_026_AddTask::test_addTask</td>
+          <td class="col-duration">6.35</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_addTask.py:23 ****************** Test_026_AddTask **********************
+INFO     root:test_addTask.py:33 ****************** Login successful **********************
+INFO     root:test_addTask.py:35 ****************** Starting Add Task Test **********************
+INFO     root:test_addTask.py:42 ****************** Providing task information **********************
+INFO     root:test_addTask.py:51 ****************** Saving task information **********************
+INFO     root:test_addTask.py:53 ****************** Add Task validation started **********************
+INFO     root:test_addTask.py:60 ********* Add Task Test Passed ***************
+INFO     root:test_addTask.py:69 ****************** End Test_026_addTask **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_publishDocument.py::Test_027_PublishDocument::test_publishDocument</td>
+          <td class="col-duration">14.52</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_publishDocument.py:21 ****************** Test_027_PublishDocument **********************
+INFO     root:test_publishDocument.py:31 ****************** Login successful **********************
+INFO     root:test_publishDocument.py:33 ****************** Starting Searching a Document **********************
+INFO     root:test_publishDocument.py:43 ****************** Publishing a document **********************
+INFO     root:test_publishDocument.py:55 ****************** Publishing validation started **********************
+INFO     root:test_publishDocument.py:62 ********* Publishing Test Passed ***************
+INFO     root:test_publishDocument.py:71 ****************** End Test_027_PublishDocument **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_archivePurgeWorkspace.py::Test_015_ArchivePurgeWorkspace::test_archivePurgeWorkspace</td>
+          <td class="col-duration">15.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_archivePurgeWorkspace.py:21 ****************** Test_015_ArchivePurgeWorkspace **********************
+INFO     root:test_archivePurgeWorkspace.py:31 ****************** Login successful **********************
+INFO     root:test_archivePurgeWorkspace.py:33 ****************** Starting Search Workspace By WSName **********************
+INFO     root:test_archivePurgeWorkspace.py:40 ****************** Searching Workspace By WSName **********************
+INFO     root:test_archivePurgeWorkspace.py:53 *************** Archive &amp; Purge a Workspace validation started *******************
+INFO     root:test_archivePurgeWorkspace.py:62 ********* Archive &amp; Purge workspace Test Passed ***************
+INFO     root:test_archivePurgeWorkspace.py:69 ****************** End Test_015_ArchivePurgeWorkspace **********************<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_login.py::Test_001_Login::test_login</td>
+          <td class="col-duration">3.91</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser...........
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_login.py:39 ************* Verifying Login test  *********************<br/></div></td></tr></tbody></table></body></html>
